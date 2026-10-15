@@ -2,19 +2,25 @@ import '../data/almacen_local.dart';
 import '../model/incidencia.dart';
 
 class GestorIncidencias {
-  final AlmacenLocal datos = AlmacenLocal();
+  final AlmacenLocal datos;
   List<Incidencia> incidencias = [];
-  int cantidadPendientes = 0;
+
+  GestorIncidencias({AlmacenLocal? datos}) : datos = datos ?? AlmacenLocal();
 
   Future<void> iniciar() async {
     incidencias = await datos.leer();
-    cantidadPendientes =
-        incidencias.where((x) => x.estado == 'Pendiente').length;
   }
 
-  List<Incidencia> buscar(String texto) {
-    if (texto.trim().isEmpty) return incidencias;
-    return incidencias.where((x) => x.titulo.contains(texto)).toList();
+  List<Incidencia> buscar(String texto,
+      {String estado = 'Todos', String prioridad = 'Todas'}) {
+    final consulta = texto.trim().toLowerCase();
+    return incidencias
+        .where((x) =>
+            (estado == 'Todos' || x.estado == estado) &&
+            (prioridad == 'Todas' || x.prioridad == prioridad) &&
+            (x.titulo.toLowerCase().contains(consulta) ||
+                x.descripcion.toLowerCase().contains(consulta)))
+        .toList();
   }
 
   Incidencia? porId(String id) {
@@ -25,21 +31,48 @@ class GestorIncidencias {
   }
 
   int contar(String estado) {
-    if (estado == 'Pendiente') return cantidadPendientes;
     return incidencias.where((x) => x.estado == estado).length;
   }
 
   Future<void> cambiarEstado(String id, String estado) async {
     for (var i = 0; i < incidencias.length; i++) {
       if (incidencias[i].id == id) {
-        incidencias[i].estado = estado;
+        final actualizadas = List<Incidencia>.of(incidencias);
+        actualizadas[i] = Incidencia.desdeJson({
+          ...incidencias[i].toJson(),
+          'estado': estado,
+        });
+        await datos.guardar(actualizadas);
+        incidencias = actualizadas;
         break;
       }
     }
   }
 
-  Future<void> crear(String titulo, String descripcion, String cliente,
-      String categoria) async {
+  Future<void> cambiarPrioridad(String id, String prioridad) async {
+    if (!Incidencia.prioridadValida(prioridad)) {
+      throw ArgumentError.value(prioridad, 'prioridad', 'Prioridad inválida');
+    }
+    for (var i = 0; i < incidencias.length; i++) {
+      if (incidencias[i].id == id) {
+        final actualizadas = List<Incidencia>.of(incidencias);
+        actualizadas[i] = Incidencia.desdeJson({
+          ...incidencias[i].toJson(),
+          'prioridad': prioridad,
+        });
+        await datos.guardar(actualizadas);
+        incidencias = actualizadas;
+        break;
+      }
+    }
+  }
+
+  Future<void> crear(
+      String titulo, String descripcion, String cliente, String categoria,
+      {String prioridad = 'Media'}) async {
+    if (!Incidencia.prioridadValida(prioridad)) {
+      throw ArgumentError.value(prioridad, 'prioridad', 'Prioridad inválida');
+    }
     final nuevo = Incidencia(
       id: 'INC-${DateTime.now().microsecondsSinceEpoch}',
       titulo: titulo,
@@ -48,10 +81,11 @@ class GestorIncidencias {
       categoria: categoria,
       estado: 'Pendiente',
       fecha: DateTime.now().toIso8601String().split('T').first,
+      prioridad: prioridad,
     );
-    incidencias.insert(0, nuevo);
-    cantidadPendientes++;
-    await datos.guardar(incidencias);
+    final actualizadas = [nuevo, ...incidencias];
+    await datos.guardar(actualizadas);
+    incidencias = actualizadas;
   }
 
   Future<void> reiniciarDemo() async {

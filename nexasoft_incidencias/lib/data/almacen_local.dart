@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../model/incidencia.dart';
 
 class AlmacenLocal {
-  final prefs = SharedPreferencesAsync();
+  late final prefs = SharedPreferencesAsync();
   final clave = 'nexasoft_incidencias_v1';
 
   Future<List<Incidencia>> leer() async {
